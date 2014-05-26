@@ -10,8 +10,8 @@ chain c f = DCont (\btr etr -> (run c) (\x -> (run (f x)) btr etr) etr)
 returnValue :: a -> DCont r e a
 returnValue x = DCont (\f g -> f x)
 
-returnError :: e -> DCont r e a
-returnError x = DCont (\f g -> g x)
+throw :: e -> DCont r e a
+throw x = DCont (\f g -> g x)
 
 instance Monad (DCont r e) where
     return = returnValue
