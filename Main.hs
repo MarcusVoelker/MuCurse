@@ -3,6 +3,7 @@ module Main where
 import Data.List
 import Data.Char
 import Data.Maybe
+import Continuations
 import System.Environment
 
 data Function = S
@@ -61,66 +62,66 @@ parseFunctionDefs :: [String] -> [FunctionDef]
 parseFunctionDefs ss = catMaybes (map tryParseFunctionDef ss)
 
 tryParseFunctionDef :: String -> Maybe FunctionDef
-tryParseFunctionDef s = parseFunctionDef s Just (const Nothing)
+tryParseFunctionDef s = run (parseFunctionDef s) Just (const Nothing)
 
 tryParseFunction :: String -> Maybe Function
-tryParseFunction s = parseFunction s Just (const Nothing)
+tryParseFunction s = run (parseFunction s) Just (const Nothing)
 
-parseFunctionDef :: String -> (FunctionDef -> r) -> (String -> r) -> r
-parseFunctionDef ss ok err = parseUDef ss (\(UDef s,r) -> if (head r == '=') then parseFunction (tail r) (\f -> ok (FunctionDef s f)) err else err "Expected '='") err
+parseFunctionDef :: String -> DCont r String FunctionDef
+parseFunctionDef ss = parseUDef ss >>= (\(UDef s,r) -> if (head r == '=') then parseFunction (tail r) >>= (\f -> returnValue (FunctionDef s f)) else returnError "Expected '='")
 
-parseFunction :: String -> (Function -> r) -> (String -> r) -> r
-parseFunction = (. (. fst)) . parseFunctionStep
+parseFunction :: String -> DCont r String Function
+parseFunction ss = parseFunctionStep ss >>= (returnValue . fst)
 
-parseFunctionStep :: String -> ((Function,String) -> r) -> (String -> r) -> r
-parseFunctionStep [] _ err = err "Empty String"
-parseFunctionStep ('S':ss) ok _ = ok (S,ss)
-parseFunctionStep ('C':ss) ok _ = ok (C,ss)
-parseFunctionStep s@('P':ss) ok err = parseProj s ok err
-parseFunctionStep s@('A':ss) ok err = parseSubs s ok err
-parseFunctionStep s@('R':ss) ok err = parsePRek s ok err
-parseFunctionStep s@('M':ss) ok err = parseMRek s ok err
-parseFunctionStep ('U':ss) ok err = parseUDef ss ok err
-parseFunctionStep _ _ err = err "Expected Function Prefix"
+parseFunctionStep :: String -> DCont r String (Function,String)
+parseFunctionStep [] = returnError "Empty String"
+parseFunctionStep ('S':ss) = returnValue (S,ss)
+parseFunctionStep ('C':ss) = returnValue (C,ss)
+parseFunctionStep s@('P':ss) = parseProj s
+parseFunctionStep s@('A':ss) = parseSubs s
+parseFunctionStep s@('R':ss) = parsePRek s
+parseFunctionStep s@('M':ss) = parseMRek s
+parseFunctionStep ('U':ss) = parseUDef ss
+parseFunctionStep _ = returnError "Expected Function Prefix"
 
-parseFunctions :: String -> (([Function],String) -> r) -> (String -> r) -> r
-parseFunctions ('(':ss) ok err = parseFunctionStep ss (\(f,r) -> parseFunctionList r (\(fs,r') -> if head r' == ')' then ok (f:fs, tail r') else err "Expected ')'") err) err
-parseFunctions ss _ err = err "Expected '('"
+parseFunctions :: String -> DCont r String ([Function],String)
+parseFunctions ('(':ss) = parseFunctionStep ss >>= (\(f,r) -> parseFunctionList r >>= (\(fs,r') -> if head r' == ')' then returnValue (f:fs, tail r') else returnError "Expected ')'"))
+parseFunctions ss = returnError "Expected '('"
 
-parseFunctionList :: String -> (([Function],String) -> r) -> (String -> r) -> r
-parseFunctionList s@(c:ss) ok err | c /= ')' = parseFunctionStep s (\(f,r) -> parseFunctionList r (\(fs,r') -> ok (f:fs, r')) err) err
-parseFunctionList ss ok _ = ok ([],ss)
+parseFunctionList :: String -> DCont r String ([Function],String)
+parseFunctionList s@(c:ss) | c /= ')' = parseFunctionStep s >>= (\(f,r) -> parseFunctionList r >>=  (\(fs,r') -> returnValue (f:fs, r')))
+parseFunctionList ss = returnValue ([],ss)
 
-parseProj :: String -> ((Function,String) -> r) -> (String -> r) -> r
-parseProj ('P':ss) ok err = parseInt ss (\(i,r) -> ok (P i,r)) err
+parseProj :: String -> DCont r String (Function,String)
+parseProj ('P':ss) = parseInt ss >>= (\(i,r) -> returnValue (P i,r))
 
-parseInt :: String -> ((Int,String) -> r) -> (String -> r) -> r
-parseInt [] _ err = err "Empty String"
-parseInt (c:cs) ok err | c >= '0' && '9' >= c = parseIntTail cs (\(i,r) -> ok (10^(length cs - length r) * (digitToInt c) + i,r)) err
-parseInt _ _ err = err "Expected Numeral"
+parseInt :: String -> DCont r String (Int,String)
+parseInt [] = returnError "Empty String"
+parseInt (c:cs) | c >= '0' && '9' >= c = parseIntTail cs >>= (\(i,r) -> returnValue (10^(length cs - length r) * (digitToInt c) + i,r))
+parseInt _ = returnError "Expected Numeral"
 
-parseIntTail :: String -> ((Int,String) -> r) -> (String -> r) -> r
-parseIntTail [] ok _ = ok (0,[])
-parseIntTail (c:cs) ok err | c >= '0' && '9' >= c = parseIntTail cs (\(i,r) -> ok (10^(length cs - length r) * (digitToInt c) + i,r)) err
-parseIntTail cs ok _ = ok (0,cs)
+parseIntTail :: String -> DCont r String (Int,String)
+parseIntTail [] = returnValue (0,[])
+parseIntTail (c:cs) | c >= '0' && '9' >= c = parseIntTail cs >>= (\(i,r) -> returnValue (10^(length cs - length r) * (digitToInt c) + i,r))
+parseIntTail cs = returnValue (0,cs)
 
-parseSubs :: String -> ((Function,String) -> r) -> (String -> r) -> r
-parseSubs ('A':ss) ok err = parseFunctionStep ss (\(f,r) -> parseFunctions r (\(fs,r') -> ok (Subs f fs,r')) err) err
+parseSubs :: String -> DCont r String (Function,String)
+parseSubs ('A':ss) = parseFunctionStep ss >>= (\(f,r) -> parseFunctions r >>= (\(fs,r') -> returnValue (Subs f fs,r')))
 
-parsePRek :: String -> ((Function,String) -> r) -> (String -> r) -> r
-parsePRek ('R':ss) ok err = parseFunctionStep ss (\(g,r) -> parseFunctionStep r (\(h,r') -> ok (PRek g h,r')) err) err
+parsePRek :: String -> DCont r String (Function,String)
+parsePRek ('R':ss) = parseFunctionStep ss >>= (\(g,r) -> parseFunctionStep r >>= (\(h,r') -> returnValue (PRek g h,r')))
 
-parseMRek :: String -> ((Function,String) -> r) -> (String -> r) -> r
-parseMRek ('M':ss) ok err = parseFunctionStep ss (\(g,r) -> ok (MRek g, r)) err
+parseMRek :: String -> DCont r String (Function,String)
+parseMRek ('M':ss) = parseFunctionStep ss >>= (\(g,r) -> returnValue (MRek g, r))
 
-parseUDef:: String -> ((Function,String) -> r) -> (String -> r) -> r
-parseUDef [] ok _ = ok (UDef [],[])
-parseUDef (s:ss) ok err | ('a' <= s && s <= 'z') || ('0' <= s && s <= '9') = parseUDef ss (\(UDef ss',r) -> ok (UDef (s:ss'),r)) err
-parseUDef ss ok _ = ok (UDef [], ss)
+parseUDef:: String -> DCont r String (Function,String)
+parseUDef [] = returnValue (UDef [],[])
+parseUDef (s:ss) | ('a' <= s && s <= 'z') || ('0' <= s && s <= '9') = parseUDef ss >>= (\(UDef ss',r) -> returnValue (UDef (s:ss'),r))
+parseUDef ss = returnValue (UDef [], ss)
 
 parseParams :: String -> [Int]
 parseParams [] = []
-parseParams x = parseInt x (\(i,r) -> if null r then [i] else i : parseParams (tail r)) (const [])
+parseParams x = run (parseInt x) (\(i,r) -> if null r then [i] else i : parseParams (tail r)) (const [])
 
 main :: IO ()
 main = do
