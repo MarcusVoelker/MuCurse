@@ -92,16 +92,16 @@ parseFunctionStep _ = throw "Expected Function Prefix"
 
 parseFunctions :: String -> DCont r String ([Function],String)
 parseFunctions ('(':ss) = do
-    (f,r) <- parseFunctionStep ss
-    (fs,r') <- parseFunctionList r
-    if head r' == ')' then return (f:fs, tail r') else throw "Expected ')'"
+  (f,r) <- parseFunctionStep ss
+  (fs,r') <- parseFunctionList r
+  if head r' == ')' then return (f:fs, tail r') else throw "Expected ')'"
 parseFunctions ss = throw "Expected '('"
 
 parseFunctionList :: String -> DCont r String ([Function],String)
 parseFunctionList s@(c:ss) | c /= ')' = do
-    (f,r) <- parseFunctionStep s
-    (fs,r') <- parseFunctionList r
-    return (f:fs, r')
+  (f,r) <- parseFunctionStep s
+  (fs,r') <- parseFunctionList r
+  return (f:fs, r')
 parseFunctionList ss = return ([],ss)
 
 parseProj :: String -> DCont r String (Function,String)
@@ -143,10 +143,10 @@ parseParams x = run (parseInt x) (\(i,r) -> if null r then [i] else i : parsePar
 
 main :: IO ()
 main = do
-    path <- getArgs
-    text <- readFile $ head path
-    let l = lines text
-    let p = runProgram l
-    params <- getLine
-    let i = p (parseParams params)
-    putStrLn ("Output is " ++ show i)
+  path <- getArgs
+  text <- readFile $ head path
+  let l = lines text
+  let p = runProgram l
+  params <- getLine
+  let i = p (parseParams params)
+  putStrLn ("Output is " ++ show i)
