@@ -69,12 +69,12 @@ tryParseFunction s = run (parseFunction s) Just (const Nothing)
 
 parseFunctionDef :: String -> DCont r String FunctionDef
 parseFunctionDef ss = do
-    (UDef s,r) <- parseUDef ss
-    if (head r == '=') then do
-      f <- parseFunction (tail r)
-      return (FunctionDef s f)
-    else
-      throw "Expected '='"
+  (UDef s,r) <- parseUDef ss
+  if (head r == '=') then do
+    f <- parseFunction (tail r)
+    return (FunctionDef s f)
+  else
+    throw "Expected '='"
 
 parseFunction :: String -> DCont r String Function
 parseFunction ss = parseFunctionStep ss >>= (return . fst)
