@@ -6,6 +6,7 @@ import Data.Maybe
 
 import Function
 import Continuations
+import LParse
 
 parseFunctionDefs :: [String] -> [FunctionDef]
 parseFunctionDefs ss = catMaybes (map tryParseFunctionDef ss)
@@ -26,66 +27,53 @@ parseFunctionDef ss = do
     throw "Expected '='"
 
 parseFunction :: String -> DCont r String Function
-parseFunction ss = parseFunctionStep ss >>= (return . fst)
+parseFunction ss = fmap fst $ pFunc parseFunctionStep ss
 
-parseFunctionStep :: String -> DCont r String (Function,String)
-parseFunctionStep [] = throw "Empty String"
-parseFunctionStep ('S':ss) = return (S,ss)
-parseFunctionStep ('C':ss) = return (C,ss)
-parseFunctionStep s@('P':ss) = parseProj s
-parseFunctionStep s@('A':ss) = parseSubs s
-parseFunctionStep s@('R':ss) = parsePRek s
-parseFunctionStep s@('M':ss) = parseMRek s
-parseFunctionStep ('U':ss) = parseUDef ss
-parseFunctionStep _ = throw "Expected Function Prefix"
+parseFunctionStep :: Parser r Function
+parseFunctionStep = cParse (not . null) (parseS <|> parseC <|> parseP <|> parseA <|> parseR <|> parseM <|> parseU <|> pFail "Expected FunctionPrefix") "EmptyString"
 
-parseFunctions :: String -> DCont r String ([Function],String)
-parseFunctions ('(':ss) = do
-  (f,r) <- parseFunctionStep ss
-  (fs,r') <- parseFunctionList r
-  if head r' == ')' then return (f:fs, tail r') else throw "Expected ')'"
-parseFunctions ss = throw "Expected '('"
+parseS :: Parser r Function
+parseS = dPrefixParse "S" (constParse S)
 
-parseFunctionList :: String -> DCont r String ([Function],String)
-parseFunctionList s@(c:ss) | c /= ')' = do
-  (f,r) <- parseFunctionStep s
-  (fs,r') <- parseFunctionList r
-  return (f:fs, r')
-parseFunctionList ss = return ([],ss)
+parseC :: Parser r Function
+parseC = dPrefixParse "C" (constParse C)
 
-parseProj :: String -> DCont r String (Function,String)
-parseProj ('P':ss) = parseInt ss >>= (\(i,r) -> return (P i,r))
+parseP :: Parser r Function
+parseP = dPrefixParse "P" (fmap P parseInt)
 
-parseInt :: String -> DCont r String (Int,String)
-parseInt [] = throw "Empty String"
-parseInt (c:cs) | c >= '0' && '9' >= c = parseIntTail cs >>= (\(i,r) -> return (10^(length cs - length r) * (digitToInt c) + i,r))
-parseInt _ = throw "Expected Numeral"
+parseA :: Parser r Function
+parseA = dPrefixParse "A" (parseFunctionStep <.(Subs).> parseFunctions)
 
-parseIntTail :: String -> DCont r String (Int,String)
-parseIntTail [] = return (0,[])
-parseIntTail (c:cs) | c >= '0' && '9' >= c = parseIntTail cs >>= (\(i,r) -> return (10^(length cs - length r) * (digitToInt c) + i,r))
-parseIntTail cs = return (0,cs)
+parseR :: Parser r Function
+parseR = dPrefixParse "R" (parseFunctionStep <.(PRek).> parseFunctionStep)
 
-parseSubs :: String -> DCont r String (Function,String)
-parseSubs ('A':ss) = do
-  (f,r) <- parseFunctionStep ss
-  (fs,r') <- parseFunctions r
-  return (Subs f fs,r')
+parseM :: Parser r Function
+parseM = dPrefixParse "M" (fmap MRek parseFunctionStep)
 
-parsePRek :: String -> DCont r String (Function,String)
-parsePRek ('R':ss) = do
-  (g,r) <- parseFunctionStep ss
-  (h,r') <- parseFunctionStep r
-  return (PRek g h,r')
+parseU :: Parser r Function
+parseU = dPrefixParse "U" (fmap UDef parseFName)
 
-parseMRek :: String -> DCont r String (Function,String)
-parseMRek ('M':ss) = parseFunctionStep ss >>= (\(g,r) -> return (MRek g, r))
+parseFunctions :: Parser r [Function]
+parseFunctions = dPrefixParse "(" (pStar parseFunctionStep <.const.> remCB)
+	where remCB = cParse (not . null) (pParse tail noopParse) "Expected ')'"
+
+parseInt :: Parser r Int
+parseInt = fmap (foldl (\a b -> a*10 + b) 0) (pStar parseDigit)
+
+parseDigit :: Parser r Int
+parseDigit = cParse (\s -> not (null s) && (head s >= '0') && (head s <= '9')) (charParse digitToInt) "Expected Numeral"
 
 parseUDef:: String -> DCont r String (Function,String)
 parseUDef [] = return (UDef [],[])
 parseUDef (s:ss) | ('a' <= s && s <= 'z') || ('0' <= s && s <= '9') = parseUDef ss >>= (\(UDef ss',r) -> return (UDef (s:ss'),r))
 parseUDef ss = return (UDef [], ss)
 
+parseFName :: Parser r String
+parseFName = (pStar parseFChar)
+
+parseFChar :: Parser r Char
+parseFChar = cParse (\s -> not (null s) && ((head s >= '0') && (head s <= '9')) || ((head s >= 'a') && (head s <= 'z'))) (charParse id) "Expected lower case Digit"
+
 parseParams :: String -> [Int]
 parseParams [] = []
-parseParams x = run (parseInt x) (\(i,r) -> if null r then [i] else i : parseParams (tail r)) (const [])
+parseParams x = run (pFunc parseInt x) (\(i,r) -> if null r then [i] else i : parseParams (tail r)) (const [])
