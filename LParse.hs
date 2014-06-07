@@ -7,7 +7,7 @@ import Continuations
 data Parser r a = Parser {pFunc :: String -> DCont r String (a,String)}
 
 instance Functor (Parser r) where
-	fmap f p = Parser (\s -> fmap (\(a,b) -> (f a,b)) (pFunc p s))
+    fmap f p = Parser (\s -> fmap (\(a,b) -> (f a,b)) (pFunc p s))
 
 parse :: Parser r a -> String -> (a -> r) -> (String -> r) -> r
 parse p s btr etr = run (pFunc p s) (btr . fst) etr
