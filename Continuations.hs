@@ -25,4 +25,4 @@ instance Monad (DCont r e) where
     (>>=) = chain
 
 instance Functor (DCont r e) where
-	fmap f c = c >>= (\a -> return (f a))
+    fmap f c = c >>= (\a -> return (f a))
