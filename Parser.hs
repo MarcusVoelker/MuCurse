@@ -55,7 +55,7 @@ parseU = dPrefixParse "U" (fmap UDef parseFName)
 
 parseFunctions :: Parser r [Function]
 parseFunctions = dPrefixParse "(" (pStar parseFunctionStep <.const.> remCB)
-	where remCB = cParse (not . null) (pParse tail noopParse) "Expected ')'"
+    where remCB = cParse (not . null) (pParse tail noopParse) "Expected ')'"
 
 parseInt :: Parser r Int
 parseInt = fmap (foldl (\a b -> a*10 + b) 0) (pStar parseDigit)
