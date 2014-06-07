@@ -39,11 +39,11 @@ weakDot pa f pb = Parser (\s -> weakChain (pFunc pa s) (\(a,r) -> fmap (\(b,r') 
 pEmpty :: Parser r [a]
 pEmpty = Parser (\s -> DCont (\btr _ -> btr ([],s)))
 
-pStar :: Parser r a -> Parser r [a]
-pStar p1 = Parser (\s -> exceptChain (pFunc p1 s) (\(a,r) -> fmap (\(b,r') -> (a:b,r')) (pFunc (pStar p1) r)) (\(a,s) -> ([a],s)))
+plus :: Parser r a -> Parser r [a]
+plus p1 = Parser (\s -> exceptChain (pFunc p1 s) (\(a,r) -> fmap (\(b,r') -> (a:b,r')) (pFunc (plus p1) r)) (\(a,s) -> ([a],s)))
 
 star :: Parser r a -> Parser r [a]
-star p = pStar p <|> pEmpty
+star p = plus p <|> pEmpty
 
 cParse :: (String -> Bool) -> Parser r a -> String -> Parser r a
 cParse c p err = Parser (\s -> if c s then pFunc p s else throw err)

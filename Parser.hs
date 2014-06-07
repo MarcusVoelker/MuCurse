@@ -54,11 +54,11 @@ parseU :: Parser r Function
 parseU = dPrefixParse "U" (fmap UDef parseFName)
 
 parseFunctions :: Parser r [Function]
-parseFunctions = dPrefixParse "(" (pStar parseFunctionStep <.const.> remCB)
+parseFunctions = dPrefixParse "(" (plus parseFunctionStep <.const.> remCB)
     where remCB = cParse (not . null) (pParse tail noopParse) "Expected ')'"
 
 parseInt :: Parser r Int
-parseInt = fmap (foldl (\a b -> a*10 + b) 0) (pStar parseDigit)
+parseInt = fmap (foldl (\a b -> a*10 + b) 0) (plus parseDigit)
 
 parseDigit :: Parser r Int
 parseDigit = cParse (\s -> not (null s) && (head s >= '0') && (head s <= '9')) (charParse digitToInt) "Expected Numeral"
@@ -69,7 +69,7 @@ parseUDef (s:ss) | ('a' <= s && s <= 'z') || ('0' <= s && s <= '9') = parseUDef 
 parseUDef ss = return (UDef [], ss)
 
 parseFName :: Parser r String
-parseFName = (pStar parseFChar)
+parseFName = (plus parseFChar)
 
 parseFChar :: Parser r Char
 parseFChar = cParse (\s -> not (null s) && ((head s >= '0') && (head s <= '9')) || ((head s >= 'a') && (head s <= 'z'))) (charParse id) "Expected lower case Digit"
