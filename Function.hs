@@ -16,7 +16,7 @@ instance Show Function where
     show S = "S"
     show C = "C"
     show (P i) = "P" ++ show i
-    show (Subs g hs) = show g ++ "(" ++ (intercalate "," (map show hs)) ++ ")"
+    show (Subs g hs) = show g ++ "(" ++ intercalate "," (map show hs) ++ ")"
     show (PRek g h) = "[PRek g:" ++ show g ++ ", h:" ++ show h ++ "]"
     show (MRek g) = "M" ++ show g
     show (UDef s) = s
@@ -28,11 +28,12 @@ evaluate :: Function -> [Int] -> Int
 evaluate S [v] = 1 + v
 evaluate C _   = 0
 evaluate (P i) vs = vs !! i
-evaluate (Subs g hs) vs = evaluate g (map (\f -> evaluate f vs) hs)
+evaluate (Subs g hs) vs = evaluate g (map (`evaluate` vs) hs)
 evaluate (PRek g h) vs | last vs == 0 = evaluate g $ init vs
                        | otherwise    = evaluate h (dec ++ [evaluate (PRek g h) dec])
-                        where dec = (init vs) ++ [last vs - 1]
+                        where dec = init vs ++ [last vs - 1]
 evaluate (MRek g) vs = mrek g vs 0
+evaluate _ _ = -1
 
 mrek :: Function -> [Int] -> Int -> Int
 mrek g vs i | evaluate g (vs ++[i]) == 0 = i
@@ -45,8 +46,8 @@ resolveFunction :: [FunctionDef] -> Function -> Function
 resolveFunction defs (Subs g hs) = Subs (resolveFunction defs g) (map (resolveFunction defs) hs)
 resolveFunction defs (PRek g h) = PRek (resolveFunction defs g) (resolveFunction defs h)
 resolveFunction defs (MRek g) = MRek (resolveFunction defs g)
-resolveFunction defs (UDef s) = resolveFunction defs $  (\(FunctionDef n f) -> f) $ head (filter (\(FunctionDef n f) -> s == n) defs)
-resolveFunction defs atom = atom
+resolveFunction defs (UDef s) = resolveFunction defs $  (\(FunctionDef _ f) -> f) $ head (filter (\(FunctionDef n _) -> s == n) defs)
+resolveFunction _ atom = atom
 
 resolveFunctionDefs :: [FunctionDef] -> [FunctionDef]
 resolveFunctionDefs defs = map (\(FunctionDef n f) -> FunctionDef n $ resolveFunction defs f) defs

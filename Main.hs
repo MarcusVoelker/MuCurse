@@ -6,7 +6,7 @@ import Function
 import Parser
 
 runProgram :: [String] -> [Int] -> Int
-runProgram defs vs = evaluate (resolveProgram (parseFunctionDefs defs)) vs
+runProgram defs = evaluate (resolveProgram (parseFunctionDefs defs))
 
 main :: IO ()
 main = do
